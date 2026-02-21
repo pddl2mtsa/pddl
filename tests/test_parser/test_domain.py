@@ -22,11 +22,14 @@ from pddl.logic.functions import (
     BinaryFunction,
     GreaterEqualThan,
     Increase,
+    Assign,
+    EqualTo as FunctionEqualTo,
     NumericFunction,
+    ObjectFunction,
     NumericValue,
 )
 from pddl.logic.predicates import EqualTo, Predicate
-from pddl.logic.terms import Variable
+from pddl.logic.terms import Variable, Constant
 from pddl.parser.domain import DomainParser
 from pddl.parser.symbols import Symbols
 from tests.conftest import TEXT_SYMBOLS
@@ -738,3 +741,132 @@ def test_number_parsing() -> None:
     assert type(g_effect.operands[1]) is NumericValue
     assert type(g_effect.operands[1].value) is float
     assert g_effect.operands[1] == NumericValue(0.5)
+
+
+def test_REDO_basic_object_fluents() -> None:
+    """Check typing for function variables in action preconditions and effects."""
+    domain_str = dedent(
+        """
+    (define (domain test)
+        (:requirements :typing :fluents)
+        (:types t1 t2)
+        (:functions (f ?x - t1 ?y - t2) - number
+                    (q ?x - t1 ) - t2
+            ) 
+        (:action a
+            :parameters (?x - t1 ?y - t2)
+            :precondition (<= 1 (f ?x ?y))
+            :effect (and 
+            (assign (f ?x ?y) (+ (f ?x ?y) 1)) 
+            (assign (q ?x) (q ?x) ) 
+            )
+        )
+    )
+    """
+    )
+    domain = DomainParser()(domain_str)
+    action = next(iter(domain.actions))
+    x = Variable("x", {"t1"})
+    y = Variable("y", {"t2"})
+
+
+    assert action.parameters == (x, y)
+    assert isinstance(action.precondition, BinaryFunction)
+    assert isinstance(action.precondition.operands[1], NumericFunction)
+    assert action.precondition.operands[1].terms == (x, y)
+    assert isinstance(action.effect, And)
+    assert isinstance(action.effect.operands[0], Assign)
+    assert isinstance(action.effect.operands[0].operands[0], NumericFunction)
+    assert action.effect.operands[0].operands[0].terms == (x, y)
+    assert isinstance(action.effect.operands[0].operands[1], BinaryFunction)
+    assert action.effect.operands[0].operands[1].SYMBOL == Symbols.PLUS 
+    assert isinstance(action.effect.operands[0].operands[1].operands[0], NumericFunction)
+    assert isinstance(action.effect.operands[0].operands[1].operands[0], NumericFunction)
+
+    assert isinstance(action.effect.operands[1], Assign)
+    assert isinstance(action.effect.operands[1].operands[0], ObjectFunction), action.effect.operands[1].operands[0] 
+
+
+
+def test_REDO_basic_object_fluents_variable_assign() -> None:
+    """Check typing for function variables in action preconditions and effects."""
+    domain_str = dedent(
+        """
+    (define (domain test)
+        (:requirements :typing :fluents)
+        (:types t1 t2)
+        (:functions (f ?x - t1 ?y - t2) - t2
+            ) 
+        (:action a
+            :parameters (?x - t1 ?y - t2)
+            :precondition (= (f ?x ?y) ?y)
+            :effect (and 
+            (assign (f ?x ?y) ?y ) 
+            )
+        )
+    )
+    """
+    )
+    domain = DomainParser()(domain_str)
+    action = next(iter(domain.actions))
+    x = Variable("x", {"t1"})
+    y = Variable("y", {"t2"})
+
+
+    assert action.parameters == (x, y)
+    assert isinstance(action.precondition, BinaryFunction)
+    assert isinstance(action.precondition.operands[0], ObjectFunction)
+    assert action.precondition.operands[0].terms == (x, y)
+    assert isinstance(action.effect, Assign)
+    assert isinstance(action.effect.operands[0], ObjectFunction)
+    assert action.effect.operands[0].terms == (x, y)
+    assert action.effect.operands[1] ==  y
+
+
+
+def test_REDO_basic_object_fluents_constant_assign() -> None:
+    """Check typing for function variables in action preconditions and effects."""
+    domain_str = dedent(
+        """
+    (define (domain test)
+        (:requirements :typing :fluents)
+        (:types t1 t2)
+        (:constants c1 - t1 c2 - t2)
+        (:functions (f ?x - t1 ?y - t2) - t2
+            ) 
+
+        (:action a
+            :parameters (?x - t1 ?y - t2)
+            :precondition (and (= ?y (f c1 c2)) (= c2 (f c1 ?y) ))
+            :effect (and 
+            (assign (f ?x ?y) ?y ) 
+            )
+        )
+    )
+    """
+    )
+    domain = DomainParser()(domain_str)
+    action = next(iter(domain.actions))
+    x = Variable("x", {"t1"})
+    y = Variable("y", {"t2"})
+
+
+    assert action.parameters == (x, y)
+    assert isinstance(action.precondition, And)
+    assert isinstance(action.precondition.operands[0], FunctionEqualTo) 
+    assert (action.precondition.operands[0].operands[0] == y) 
+    assert isinstance(action.precondition.operands[0].operands[1], ObjectFunction) 
+    assert isinstance(action.precondition.operands[0].operands[1].terms[0], Constant) 
+    assert (action.precondition.operands[0].operands[1].terms[0].name == "c1") 
+    assert (action.precondition.operands[0].operands[1].terms[0].type_tag == "t1") 
+    assert (action.precondition.operands[0].operands[1].terms[1].name == "c2") 
+    assert isinstance(action.precondition.operands[1], FunctionEqualTo) 
+    assert isinstance(action.precondition.operands[1].operands[0], Constant) 
+    assert (action.precondition.operands[1].operands[0].name== "c2") 
+    assert (action.precondition.operands[1].operands[0].type_tag== "t2") 
+    assert isinstance(action.precondition.operands[1].operands[1], ObjectFunction) 
+    assert (action.precondition.operands[1].operands[1].terms[0].name == "c1") 
+    assert isinstance(action.precondition.operands[1].operands[1].terms[0], Constant) 
+    assert (action.precondition.operands[1].operands[1].terms[0].type_tag == "t1") 
+    assert (action.precondition.operands[1].operands[1].terms[1] == y) 
+    

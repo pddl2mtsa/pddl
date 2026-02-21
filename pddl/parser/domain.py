@@ -44,6 +44,7 @@ from pddl.logic.functions import (
     LesserThan,
     Minus,
     NumericFunction,
+    ObjectFunction,
     NumericValue,
     Plus,
     ScaleDown,
@@ -73,7 +74,7 @@ class DomainTransformer(Transformer[Any, Domain]):
         self._requirements: Set[Requirements] = set()
         self._extended_requirements: Set[Requirements] = set()
         self._types: Optional[Mapping[name, Optional[name]]] = None
-
+        self._declared_functions : Dict[NumericFunction|ObjectFunction, name]  = {}
     @property
     def types_hierarchy(self) -> Mapping[name, Optional[name]]:
         """Return the read-only types hierarchy."""
@@ -149,6 +150,7 @@ class DomainTransformer(Transformer[Any, Domain]):
         """Process the 'functions' rule."""
         function_definition = args[2]
         # arg[2] is a dict with NumericFunction as keys and types as values, e.g., {(fuel ?l): number, (cost): number}
+        
         return dict(functions=function_definition)
 
     def action_def(self, args):
@@ -291,10 +293,13 @@ class DomainTransformer(Transformer[Any, Domain]):
 
     def gd_comparison(self, args):
         """Process the 'gd' comparison rule."""
-        if not bool({Requirements.NUMERIC_FLUENTS, Requirements.FLUENTS}):
-            raise PDDLMissingRequirementError(Requirements.NUMERIC_FLUENTS)
+        assert len(args)>3
+
         left = args[2]
         right = args[3]
+        if not bool({Requirements.NUMERIC_FLUENTS, Requirements.FLUENTS}):
+            raise PDDLMissingRequirementError(Requirements.NUMERIC_FLUENTS)
+            
         if args[1] == Symbols.GREATER_EQUAL.value:
             return GreaterEqualThan(left, right)
         elif args[1] == Symbols.GREATER.value:
@@ -304,6 +309,7 @@ class DomainTransformer(Transformer[Any, Domain]):
         elif args[1] == Symbols.LESSER.value:
             return LesserThan(left, right)
         elif args[1] == Symbols.EQUAL.value:
+
             return FunctionEqualTo(left, right)
         else:
             raise PDDLParsingError(f"Unknown comparison operator: {args[1]}")
@@ -377,8 +383,12 @@ class DomainTransformer(Transformer[Any, Domain]):
 
     def num_effect(self, args):
         """Process the 'num_effect' rule."""
+        right = args[3]
+        if isinstance(right, str):
+            right = self._constant_or_variable(right)
+            
         if args[1] == Symbols.ASSIGN.value:
-            return Assign(args[2], args[3])
+            return Assign(args[2], right)
         elif args[1] == Symbols.SCALE_UP.value:
             return ScaleUp(args[2], args[3])
         elif args[1] == Symbols.SCALE_DOWN.value:
@@ -393,18 +403,29 @@ class DomainTransformer(Transformer[Any, Domain]):
     def _constant_or_variable(self, t):
         """Get the constant or variable with the given name."""
         # Case where the term is a free variable (bug) or comes from a parent quantifier
+        if isinstance(t, (Constant, Variable)):
+            return t
         if not isinstance(t, Constant) and t not in self._current_parameters_by_name:
             return Variable(str(t), {})
         return t if isinstance(t, Constant) else self._current_parameters_by_name[t]
-
+         
     def atomic_formula_term(self, args):
         """Process the 'atomic_formula_term' rule."""
-        if args[1] == Symbols.EQUAL.value:
-            if not bool({Requirements.EQUALITY} & self._extended_requirements):
+        if args[1] == Symbols.EQUAL.value :
+            
+            left =  self._constant_or_variable(args[2]) if isinstance(args[2], str ) else args[2]
+            right = self._constant_or_variable(args[3]) if isinstance(args[3], str ) else args[3]
+            
+            if (not bool({Requirements.EQUALITY} & self._extended_requirements)) and (
+                isinstance(left, (Variable, Constant)) and
+                isinstance(right, (Variable, Constant))
+            ):
                 raise PDDLMissingRequirementError(Requirements.EQUALITY)
-            left = self._constant_or_variable(args[2])
-            right = self._constant_or_variable(args[3])
-            return EqualTo(left, right)
+            if isinstance(left, (Variable, Constant)) and isinstance(right, (Variable, Constant)):
+                return EqualTo(left, right)
+            else:
+                return FunctionEqualTo(left, right)
+
         else:
             predicate_name = args[1]
             terms = list(map(self._constant_or_variable, args[2:-1]))
@@ -438,17 +459,23 @@ class DomainTransformer(Transformer[Any, Domain]):
             if not bool({Requirements.ACTION_COSTS}):
                 raise PDDLMissingRequirementError(Requirements.ACTION_COSTS)
             return NumericFunction("total-cost")
+        import logging
+        logger = logging.getLogger(__name__)
+        #logger.debug(f"atomic_function_skeleton {args} ")    
         function_name = args[1]
         variables = self._formula_skeleton(args)
-        return NumericFunction(function_name, *variables)
+        return ObjectFunction(function_name,None,*variables)
 
     def f_exp(self, args):
         """Process the 'f_exp' rule."""
+
         if len(args) == 1:
-            if not isinstance(args[0], NumericFunction):
-                return NumericValue(args[0])
-            return args[0]
+            value = args[0]
+
+            assert isinstance(value, (NumericFunction, ObjectFunction, Constant, Variable,NumericValue)), f"value :{value}"
+            return value
         op = None
+
         if args[1] == Symbols.MINUS.value:
             op = Minus
         if args[1] == Symbols.PLUS.value:
@@ -457,19 +484,54 @@ class DomainTransformer(Transformer[Any, Domain]):
             op = Times
         if args[1] == Symbols.DIVIDE.value:
             op = Divide
-        return (
-            op(*args[2:-1])
-            if op is not None
-            else PDDLParsingError("Operator not recognized")
-        )
+
+        if op is None:
+            raise PDDLParsingError("Operator not recognized")
+
+        return op(*args[2:-1])
 
     def f_head(self, args):
         """Process the 'f_head' rule."""
+
         if len(args) == 1:
-            return NumericFunction(args[0])
-        function_name = args[1]
-        variables = list(map(self._constant_or_variable, args[2:-1]))
-        return NumericFunction(function_name, *variables)
+            nullarity_name = args[0] 
+            assert not isinstance(nullarity_name, (ObjectFunction, NumericFunction, NumericValue)), f"la posta que nullairti en f_head es {nullarity_name}"
+            
+            if isinstance(nullarity_name, (int, float)):
+                return NumericValue(nullarity_name) 
+            if not isinstance(args[0], (ObjectFunction, NumericFunction, NumericValue, float, int)) and args[0] not in self._declared_functions:
+                assert isinstance(nullarity_name, str) 
+                if nullarity_name in self._constants_by_name.keys():
+                    return self._constants_by_name[nullarity_name]
+                else:
+                    return Constant(args[0])
+            raise Exception( f"f_head caramba{args}")
+            return args
+
+            if args[0].value in self._declared_functions:
+                function_name = args[0]
+                terms = ()
+            elif args[0] in self._constants_by_name: #case is a constant.
+                return self._constants_by_name[args[0]]
+            else:
+                # THIS HAS TO BE CHANGED.
+                # WE LAND HERE WHEN PROBLEM CALLS WITHOUT DEFINING DOMAIN 
+                return ObjectFunction(args[0], None, )
+        else:
+            function_name = args[1]
+            terms = tuple(self._constant_or_variable(t) for t in args[2:-1])
+
+        func_type = None
+        for func_symbol, declared_type in self._declared_functions.items():
+            if func_symbol.name == function_name:
+                func_type = declared_type
+                break
+
+        if func_type is None or func_type == "number":
+            return NumericFunction(function_name, *terms)
+        else:
+            return ObjectFunction(function_name, func_type, *terms)
+
 
     def typed_list_name(self, args) -> Dict[name, Optional[name]]:
         """Process the 'typed_list_name' rule."""
@@ -497,8 +559,20 @@ class DomainTransformer(Transformer[Any, Domain]):
     def f_typed_list_atomic_function_skeleton(self, args):
         """Process the 'f_typed_list_atomic_function_skeleton' rule."""
         try:
+            import logging
+            logger = logging.getLogger(__name__)
+            #logger.debug(f"\n -----------------\nf_typed_list_atomic_function_skeleton {args}")      
+            #for i in range(len(args)):
+                #if args[i] == '-' : ###CHANGE
+                    #logger.debug(f"     AAA {args[i-1]} - {args[i+1]}")      
+
+
+
             types_index = TypedListParser.parse_typed_list(args)
-            return types_index.get_typed_list_of_names()
+            result = types_index.get_typed_list_of_names() 
+            #logger.debug(f"\n -----------------\nf_typed_list_atomic_function_skeleton result = \n {result}\n ---------------")      
+            self._declared_functions = result
+            return result
         except ValueError as e:
             raise self._raise_typed_list_parsing_error(args, e) from e
 

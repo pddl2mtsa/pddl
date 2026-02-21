@@ -16,11 +16,11 @@ from typing import Any, Dict, Generic, List, Optional, Set, Tuple, TypeVar, Unio
 
 from pddl.custom_types import name, parse_name, parse_type
 from pddl.helpers.base import check, safe_index
-from pddl.logic.functions import NumericFunction
+from pddl.logic.functions import NumericFunction, ObjectFunction
 from pddl.logic.terms import _print_tag_set
 from pddl.parser.symbols import Symbols
 
-T = TypeVar("T", name, NumericFunction)
+T = TypeVar("T", name, NumericFunction, ObjectFunction)
 
 
 class TypedListParser(Generic[T]):
@@ -160,15 +160,23 @@ class TypedListParser(Generic[T]):
         Side-effect on the 'result' dictionary. The start_index and end_index are needed to avoid useless
         sublist copies.
         """
+
+        import logging
+        logger = logging.getLogger(__name__)
+        #logger.debug(f"_add_typed_lists {tokens} {type_tags}")      
         for item_name in itertools.islice(tokens, start_index, end_index):
             check(
-                isinstance(item_name, str) or isinstance(item_name, NumericFunction),
+                isinstance(item_name, str) or isinstance(item_name, (NumericFunction, ObjectFunction)),
                 f"invalid item '{item_name}' in typed list",
             )
             # these lines implicitly perform name validation
             cast_item_name: Any = (
                 parse_name(item_name) if isinstance(item_name, str) else item_name
             )
+            #if isinstance(item_name, ObjectFunction):
+                #import logging
+                #logger = logging.getLogger(__name__)
+                #logger.debug(f"_add_typed_lists {tokens} {type_tags}")                      
             type_tags_names: Set[Any] = set(map(parse_type, type_tags))
             result.add_item(cast_item_name, type_tags_names)
 

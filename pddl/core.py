@@ -217,6 +217,7 @@ class Problem:
         :param metric: the metric.
         """
         self._name = parse_name(name)
+        self._defined_functions : Dict[str, FunctionExpression] = {}
         self._domain: Optional[Domain]
         self._domain_name: name_type
         self._domain, self._domain_name = self._parse_domain_and_domain_name(
@@ -229,6 +230,7 @@ class Problem:
         self._init: AbstractSet[Formula] = ensure_set(init)
         self._goal: Formula = ensure(goal, And())
         self._metric: Optional[Metric] = metric
+
         validate(
             all(map(is_literal, self.init)),
             "Not all formulas of initial condition are literals!",

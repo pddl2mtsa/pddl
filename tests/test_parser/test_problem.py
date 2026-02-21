@@ -169,9 +169,45 @@ def test_numeric_function_comparison_in_goal() -> None:
     assert problem.init == {
         EqualTo(NumericFunction("hello_counter", Constant("jimmy")), NumericValue(0))
     }
+    assert isinstance(problem.goal, GreaterEqualThan)
+    assert isinstance(problem.goal.operands[0], NumericFunction), f"{problem.goal.operands[0]}"
     assert problem.goal == GreaterEqualThan(
         NumericFunction("hello_counter", Constant("jimmy")), NumericValue(3)
     )
+
+
+def test_numeric_function_equality_in_goal() -> None:
+    """Try to parse a goal with a numeric condition and function."""
+    problem_str = dedent(
+        """
+    (define (problem hello-3-times)
+        (:domain hello-world-functions)
+
+        (:init
+            ; if this was undefined, some planners would not assumed `0`
+            (= (hello_counter jimmy) 0)
+            (= (hello_counter jammy) 0)
+        )
+
+        (:goal
+            (and
+                (= 3 (hello_counter jimmy))
+                (= (hello_counter jammy) 5)
+            )
+        )
+    )
+    """
+    )
+    problem = ProblemParser()(problem_str)
+    assert problem.init == {
+        EqualTo(NumericFunction("hello_counter", Constant("jimmy")), NumericValue(0)),
+        EqualTo(NumericFunction("hello_counter", Constant("jammy")), NumericValue(0)),
+    }
+    assert problem.goal == And(
+        EqualTo(NumericValue(3), NumericFunction("hello_counter", Constant("jimmy"))),
+        EqualTo(NumericFunction("hello_counter", Constant("jammy")), NumericValue(5)),
+    )
+
 
 
 def test_numeric_function_equality_in_goal() -> None:

@@ -402,3 +402,105 @@ class Divide(BinaryFunction, metaclass=BinaryOpMetaclass):
         :param operands: the operands.
         """
         super().__init__(*operands)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@cache_hash
+@functools.total_ordering
+class ObjectFunction(FunctionExpression):
+    """A class for a object function."""
+
+    def __init__(self, name: namelike, type=None, *terms: Term):
+        """Initialize the function."""
+        self._name = parse_function(name)
+        self._type = type
+        self._terms = tuple(terms)
+
+    @property
+    def name(self) -> str:
+        """Get the name."""
+        return self._name
+
+    @property
+    def terms(self) -> Sequence[Term]:
+        """Get the terms."""
+        return self._terms
+
+    @property
+    def arity(self) -> int:
+        """Get the arity of the function."""
+        return len(self.terms)
+
+    def instantiate(self, mapping: Mapping[Variable, Term]) -> "ObjectFunction":
+        """Instantiate the function with a mapping from variables to terms."""
+        instantiated_terms = []
+        for term in self.terms:
+            if isinstance(term, Variable) and term in mapping:
+                # Instantiate the variable
+                instantiated_terms.append(mapping[term])
+            else:
+                # The function is already partially instantiated or mapping is a partial instantiation
+                instantiated_terms.append(term)
+        
+        return ObjectFunction(self.name, self._type,*instantiated_terms)
+
+    def __call__(self, *terms: Term):
+        """Replace terms."""
+        assert_(len(terms) == self.arity, "Wrong number of terms.")
+        assert_(
+            all(t1.type_tags == t2.type_tags for t1, t2 in zip(self.terms, terms)),
+            "Wrong types of replacements.",
+        )
+        return ObjectFunction(self.name, *terms)
+
+    def __str__(self) -> str:
+        """Get the string."""
+        if self.arity == 0:
+            return f"({self.name})"
+        else:
+            return f"({self.name} {' '.join(map(str, self.terms))})"
+
+    def __repr__(self) -> str:
+        """Get an unambiguous string representation."""
+        return f"{type(self).__name__}({self.name}, {', '.join(map(str, self.terms))})"
+
+    def __eq__(self, other):
+        """Override equal operator."""
+        return (
+            isinstance(other, ObjectFunction)
+            and self.name == other.name
+            and self.terms == other.terms
+        )
+
+    def __hash__(self) -> int:
+        """Compute the hash of the object."""
+        return hash((self.name, self.terms))
+
+    def __lt__(self, other):
+        """Override less than operator."""
+        if not isinstance(other, ObjectFunction):
+            return NotImplemented
+        return (self.name, self.terms) < (other.name, other.terms)
+

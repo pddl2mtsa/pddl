@@ -25,6 +25,7 @@ from pddl.logic.functions import (
     Metric,
     Minus,
     NumericFunction,
+    FunctionExpression,
     NumericValue,
     Plus,
     Times,
@@ -46,7 +47,7 @@ class ProblemTransformer(Transformer[Any, Problem]):
 
         self._domain_transformer = DomainTransformer()
         self._objects_by_name: Dict[str, Constant] = {}
-
+        self._defined_functions : Dict[str, FunctionExpression] = {}
     def start(self, args):
         """Process the rule 'start'."""
         return args[0]

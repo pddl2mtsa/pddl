@@ -30,6 +30,9 @@ def _check_terms_consistency(terms: Sequence[Term]):
     """
     seen: Dict[name, Set[name]] = {}
     for term in terms:
+        if not isinstance(term, Term):
+            #THIS IS NOT GOOD
+            continue
         if term.name not in seen:
             seen[term.name] = set(term.type_tags)
         else:
