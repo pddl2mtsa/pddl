@@ -30,8 +30,10 @@ from pddl.logic.functions import (
     Increase,
     LesserEqualThan,
     LesserThan,
+    Assign,
     NumericFunction,
     NumericValue,
+    ObjectFunction,
 )
 from pddl.logic.helpers import constants, variables
 from pddl.logic.predicates import DerivedPredicate, Predicate
@@ -53,6 +55,81 @@ def test_deepcopy_domain(domain_obj: Domain) -> None:
     """Test that domain objects can be deepcopied correctly."""
     new_domain_obj = copy.deepcopy(domain_obj)
     assert domain_obj == new_domain_obj
+
+
+
+def test_build_domain_with_object_fluents_in_predicate():
+    """Test a PDDL domain with simple object fluents."""
+    x, y, z = variables("x y z", types=["type1"])
+    r1, r2 = variables("r1 r2", types=["type2"])
+    domain_types = {"type1" : "object", "type2" : "object"}
+    p = Predicate("p", x, y, z)
+    q = Predicate("q")
+    r = Predicate("r")
+    func1 = ObjectFunction("f1", "type2", x, y)
+    func2 = ObjectFunction("f2", "type2")
+    func3 = ObjectFunction("f3", "type1")
+    action_1 = Action(
+        "action_1",
+        [x, y, z],
+        precondition=p
+        & FunctionEqualTo(func1, r1),
+        effect=Not(p),
+    )
+    action_2 = Action(
+        "action_2",
+        [x, y, z],
+        precondition=r
+        & FunctionEqualTo(func1, r2),
+        effect=Not(p),
+    )
+    domain = Domain(
+        "domain_with_object_fluents",
+        requirements={ Requirements.OBJECT_FLUENTS, Requirements.TYPING},
+        predicates={p},
+        types=domain_types,
+        functions={func1: "type2", func2: "type2", func3: "type1"},
+        actions={action_1, action_2},
+    )
+    assert domain
+
+
+def test_build_domain_with_object_fluents_in_effect():
+    """Test a PDDL domain with simple object fluents."""
+    x, y, z = variables("x y z", types=["type1"])
+    r1, r2 = variables("r1 r2", types=["type2"])
+    domain_types = {"type1" : "object", "type2" : "object"}
+    p = Predicate("p", x, y, z)
+    q = Predicate("q")
+    r = Predicate("r")
+    func1 = ObjectFunction("f1", "type2", x, y)
+    func2 = ObjectFunction("f2", "type2")
+    func3 = ObjectFunction("f3", "type1")
+    action_1 = Action(
+        "action_1",
+        [x, y, z],
+        precondition=p
+        & FunctionEqualTo(func1, r1),
+        effect=Not(p),
+    )
+    action_2 = Action(
+        "action_2",
+        [x, y, z],
+        precondition=r
+        & FunctionEqualTo(func1, r2),
+        effect=Not(p) & Assign(func1, r2) & Assign(func2, r2) 
+    )
+    domain = Domain(
+        "domain_with_object_fluents",
+        requirements={Requirements.OBJECT_FLUENTS, Requirements.TYPING},
+        predicates={p},
+        types=domain_types,
+        functions={func1: "type2", func2: "type2", func3: "type1"},
+        actions={action_1, action_2},
+    )
+    assert domain
+    
+
 
 
 class TestDomainEmpty:
