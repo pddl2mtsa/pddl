@@ -14,8 +14,8 @@ atomic_formula_skeleton:   LPAR NAME typed_list_variable RPAR
 
 f_typed_list_atomic_function_skeleton: atomic_function_skeleton+
                                      | (atomic_function_skeleton+ TYPE_SEP f_type_def)+ atomic_function_skeleton*
-
-?f_type_def: TYPE_NUMBER
+                                     
+?f_type_def: NAME
 
 atomic_function_skeleton:  LPAR NAME typed_list_variable RPAR
 
@@ -37,6 +37,7 @@ gd:                atomic_formula_term
   |                LPAR FORALL LPAR typed_list_variable RPAR gd RPAR
   |                LPAR binary_comp f_exp f_exp RPAR
 
+
 // effects
 emptyor_effect:    LPAR RPAR
               |    effect
@@ -53,11 +54,14 @@ p_effect:          LPAR NOT atomic_formula_term RPAR
 cond_effect:       LPAR AND p_effect* RPAR
            |       p_effect
 num_effect:        LPAR assign_op f_head f_exp RPAR
+          |        LPAR assign_op f_head variable RPAR
 
 atomic_formula_term:   LPAR predicate term* RPAR
                    |   LPAR EQUAL_OP term term RPAR
-?term:  constant
+?term:  const_or_function
      |  variable
+
+?const_or_function: f_head
 ?predicate: NAME
 constant: NAME
 
@@ -76,15 +80,15 @@ constant: NAME
 
 num_literal: NUMBER
 
-f_exp:      num_literal
-      |     LPAR binary_op f_exp f_exp RPAR
+f_exp:     LPAR binary_op f_exp f_exp RPAR
       |     LPAR multi_op f_exp f_exp+ RPAR
       |     LPAR MINUS f_exp RPAR
       |     f_head
 
 f_head:     NAME
+      |     num_literal
       |     LPAR NAME term* RPAR
-
+      
 ?assign_op: ASSIGN
           | SCALE_UP
           | SCALE_DOWN
