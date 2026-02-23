@@ -25,6 +25,7 @@ from pddl.logic.functions import (
     Metric,
     Minus,
     NumericFunction,
+    ObjectFunction,
     FunctionExpression,
     NumericValue,
     Plus,
@@ -106,18 +107,31 @@ class ProblemTransformer(Transformer[Any, Problem]):
         ]
         return "init", flat_args
 
+    def basic_function_term(self, args):
+        """Process the 'basic_function_term' rule."""
+        if len(args) == 1:
+            return (args[0], None)
+        function_name = args[1]
+        objects = [Constant(x) for x in args[2:-1]]
+        return (function_name, objects)
+
     def init_el(self, args):
         """Process the 'init_el' rule."""
         if len(args) == 1:
             return args[0]
-        elif args[1] == Symbols.EQUAL.value:
-            if isinstance(args[2], list) and len(args[2]) == 1:
-                return FunctionEqualTo(*args[2], NumericValue(args[3]))
-            elif not isinstance(args[2], list):
-                return FunctionEqualTo(args[2], NumericValue(args[3]))
-            else:
-                funcs = [FunctionEqualTo(x, NumericValue(args[3])) for x in args[2]]
-                return funcs
+        if args[1] != Symbols.EQUAL.value:
+            raise Exception #COMPLETE
+        
+        (function_head , terms ) = args[2]
+        assignee = args[3]
+        if isinstance(assignee, NumericValue):
+            return FunctionEqualTo(NumericFunction(function_head, *terms), assignee)
+        elif isinstance(assignee, Constant) :
+            return FunctionEqualTo(ObjectFunction(function_head, *terms), assignee)
+        else:
+            function_term = NumericFunction(function_head, *terms)
+            return FunctionEqualTo(function_term, NumericValue(assignee))
+
 
     def literal_name(self, args):
         """Process the 'literal_name' rule."""
@@ -127,14 +141,6 @@ class ProblemTransformer(Transformer[Any, Problem]):
             return Not(args[2])
         else:
             raise ParseError
-
-    def basic_function_term(self, args):
-        """Process the 'basic_function_term' rule."""
-        if len(args) == 1:
-            return NumericFunction(args[0])
-        function_name = args[1]
-        objects = [Constant(x) for x in args[2:-1]]
-        return NumericFunction(function_name, *objects)
 
     def goal(self, args):
         """Process the 'goal' rule."""
