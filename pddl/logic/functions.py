@@ -27,7 +27,6 @@ from pddl.parser.symbols import Symbols
 @cache_hash
 class FunctionExpression(Atomic):
     """A class for all the function expressions."""
-
     @abstractmethod
     def instantiate(self, mapping: Mapping[Variable, Term]) -> Formula:
         """Instantiate the formula with a mapping from variables to terms."""
@@ -152,7 +151,7 @@ class BinaryFunction(FunctionExpression):
 
     SYMBOL: Symbols
 
-    def __init__(self, *operands: FunctionExpression):
+    def __init__(self, *operands: FunctionExpression|Term):
         """
         Init a binary operator.
 
@@ -432,7 +431,7 @@ class Divide(BinaryFunction, metaclass=BinaryOpMetaclass):
 class ObjectFunction(FunctionExpression):
     """A class for a object function."""
 
-    def __init__(self, name: namelike, type=None, *terms: Term):
+    def __init__(self, name: namelike, type=None, *terms: Term|FunctionExpression):
         """Initialize the function."""
         self._name = parse_function(name)
         self._type = type
@@ -503,4 +502,5 @@ class ObjectFunction(FunctionExpression):
         if not isinstance(other, ObjectFunction):
             return NotImplemented
         return (self.name, self.terms) < (other.name, other.terms)
+
 

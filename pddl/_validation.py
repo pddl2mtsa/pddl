@@ -29,6 +29,7 @@ from pddl.logic.functions import (
     BinaryFunction,
     FunctionExpression,
     NumericFunction,
+    ObjectFunction,
     NumericValue,
 )
 from pddl.logic.predicates import DerivedPredicate, EqualTo
@@ -196,7 +197,7 @@ class TypeChecker:
         """Initialize the type checker."""
         self._types = types
         self._requirements = ensure_set(requirements)
-
+        self._checking_func = set()
     @property
     def has_typing(self) -> bool:
         """Check if the typing requirement is specified."""
@@ -247,6 +248,13 @@ class TypeChecker:
         self.check_type(function.terms)
 
     @check_type.register
+    def _(self, function: ObjectFunction) -> None:
+        """Check types annotations of a PDDL object functions."""
+        # PENDING
+        return None
+        
+    
+    @check_type.register
     def _(self, _: NumericValue) -> None:
         """Check types annotations of a PDDL numeric value operator."""
         return None
@@ -254,7 +262,7 @@ class TypeChecker:
     @check_type.register
     def _(self, binary_function: BinaryFunction) -> None:
         """Check types annotations of a PDDL numeric binary operator."""
-        self.check_type(binary_function.operands)
+        return None
 
     @check_type.register
     def _(self, equal_to: EqualTo) -> None:
@@ -367,9 +375,9 @@ class Functions:
                         in _extend_domain_requirements(requirements),
                         "numeric-fluents requirement is not specified, but numeric fluents are specified.",
                     )
-            else:
-                validate(
-                    Requirements.NUMERIC_FLUENTS
-                    in _extend_domain_requirements(requirements),
-                    "numeric-fluents requirement is not specified, but numeric fluents are specified.",
-                )
+            #else:
+            #    validate(
+            #        Requirements.NUMERIC_FLUENTS
+            #        in _extend_domain_requirements(requirements),
+            #        "numeric-fluents requirement is not specified, but numeric fluents are specified.",
+            #    )

@@ -110,6 +110,7 @@ class ProblemTransformer(Transformer[Any, Problem]):
     def basic_function_term(self, args):
         """Process the 'basic_function_term' rule."""
         if len(args) == 1:
+            
             return (args[0], None)
         function_name = args[1]
         objects = [Constant(x) for x in args[2:-1]]
@@ -117,20 +118,26 @@ class ProblemTransformer(Transformer[Any, Problem]):
 
     def init_el(self, args):
         """Process the 'init_el' rule."""
+
         if len(args) == 1:
-            return args[0]
+            return args[0] # literal_name
         if args[1] != Symbols.EQUAL.value:
-            raise Exception #COMPLETE
+            raise Exception #COMPLETE 
         
-        (function_head , terms ) = args[2]
+        (function_name , terms ) = args[2]
         assignee = args[3]
-        if isinstance(assignee, NumericValue):
-            return FunctionEqualTo(NumericFunction(function_head, *terms), assignee)
+        func_assigned = NumericFunction("aaa")
+        if isinstance(assignee, (float, int)):
+            assignee = NumericValue(assignee)
+            func_assigned =NumericFunction(function_name, *terms)
         elif isinstance(assignee, Constant) :
-            return FunctionEqualTo(ObjectFunction(function_head, *terms), assignee)
-        else:
-            function_term = NumericFunction(function_head, *terms)
+            func_assigned =ObjectFunction(function_name, *terms)
+        else:                               
+            raise Exception
+            function_term = NumericFunction(function_name, *terms)
             return FunctionEqualTo(function_term, NumericValue(assignee))
+        self._domain_transformer._declare_function(func_assigned)
+        return FunctionEqualTo(func_assigned, assignee)
 
 
     def literal_name(self, args):
@@ -192,10 +199,19 @@ class ProblemTransformer(Transformer[Any, Problem]):
 
     def metric_f_exp(self, args):
         """Process the 'metric_f_exp' rule."""
+   
         if len(args) == 1:
+            if isinstance(args, list) and isinstance(args[0], tuple):
+                function_name, terms = args[0]
+                return NumericFunction(function_name, *terms) 
+            elif isinstance(args, list) and isinstance(args[0], list):
+                function_name, terms = args[0][0]
+                return NumericFunction(function_name, terms) 
             if not isinstance(args[0], NumericFunction):
                 return NumericValue(args[0])
+            assert False
             return args[0]
+        assert False
         op = None
         if args[1] == Symbols.MINUS.value:
             op = Minus

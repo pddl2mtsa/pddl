@@ -75,6 +75,8 @@ class DomainTransformer(Transformer[Any, Domain]):
         self._extended_requirements: Set[Requirements] = set()
         self._types: Optional[Mapping[name, Optional[name]]] = None
         self._declared_functions : Dict[NumericFunction|ObjectFunction, name]  = {}
+
+        
     @property
     def types_hierarchy(self) -> Mapping[name, Optional[name]]:
         """Return the read-only types hierarchy."""
@@ -492,45 +494,38 @@ class DomainTransformer(Transformer[Any, Domain]):
 
     def f_head(self, args):
         """Process the 'f_head' rule."""
-
+        
         if len(args) == 1:
+            #Const / ????Variable / Null arity Function
             nullarity_name = args[0] 
-            assert not isinstance(nullarity_name, (ObjectFunction, NumericFunction, NumericValue)), f"la posta que nullairti en f_head es {nullarity_name}"
+            assert not isinstance(nullarity_name, (ObjectFunction, NumericFunction, NumericValue)), f"la posta que nullairti en f_head es {nullarity_name} y no se como llegamos a ese caso"
             
             if isinstance(nullarity_name, (int, float)):
                 return NumericValue(nullarity_name) 
-            if not isinstance(args[0], (ObjectFunction, NumericFunction, NumericValue, float, int)) and args[0] not in self._declared_functions:
-                assert isinstance(nullarity_name, str) 
-                if nullarity_name in self._constants_by_name.keys():
-                    return self._constants_by_name[nullarity_name]
-                else:
-                    return Constant(args[0])
-            raise Exception( f"f_head caramba{args}")
-            return args
-
-            if args[0].value in self._declared_functions:
-                function_name = args[0]
-                terms = ()
-            elif args[0] in self._constants_by_name: #case is a constant.
-                return self._constants_by_name[args[0]]
+            assert isinstance(nullarity_name, str) 
+            if nullarity_name in self._functions_by_name:
+                return self._functions_by_name[nullarity_name]
+            if nullarity_name in self._constants_by_name.keys():
+                return self._constants_by_name[nullarity_name]
             else:
-                # THIS HAS TO BE CHANGED.
-                # WE LAND HERE WHEN PROBLEM CALLS WITHOUT DEFINING DOMAIN 
-                return ObjectFunction(args[0], None, )
-        else:
-            function_name = args[1]
-            terms = tuple(self._constant_or_variable(t) for t in args[2:-1])
+                return Constant(args[0])
 
-        func_type = None
-        for func_symbol, declared_type in self._declared_functions.items():
-            if func_symbol.name == function_name:
-                func_type = declared_type
-                break
 
-        if func_type is None or func_type == "number":
-            return NumericFunction(function_name, *terms)
-        else:
+
+        function_name = args[1]
+        terms = []
+        for t in args[2:-1]:
+            if isinstance(t, str):
+                terms.append(self._constant_or_variable(t))
+            else:
+                terms.append(t)
+            
+
+        func_type = self._functions_by_name[function_name]._type if isinstance(self._functions_by_name[function_name], ObjectFunction) else None
+        if func_type:
             return ObjectFunction(function_name, func_type, *terms)
+        else:
+            return NumericFunction(function_name, *terms)
 
 
     def typed_list_name(self, args) -> Dict[name, Optional[name]]:
@@ -559,19 +554,17 @@ class DomainTransformer(Transformer[Any, Domain]):
     def f_typed_list_atomic_function_skeleton(self, args):
         """Process the 'f_typed_list_atomic_function_skeleton' rule."""
         try:
-            import logging
-            logger = logging.getLogger(__name__)
-            #logger.debug(f"\n -----------------\nf_typed_list_atomic_function_skeleton {args}")      
-            #for i in range(len(args)):
-                #if args[i] == '-' : ###CHANGE
-                    #logger.debug(f"     AAA {args[i-1]} - {args[i+1]}")      
-
-
-
             types_index = TypedListParser.parse_typed_list(args)
             result = types_index.get_typed_list_of_names() 
             #logger.debug(f"\n -----------------\nf_typed_list_atomic_function_skeleton result = \n {result}\n ---------------")      
             self._declared_functions = result
+            for (f, t) in result.items():
+                assert isinstance(f, (ObjectFunction, NumericFunction))
+                if t is None or t == "number": #NO HARDCODE CHANGE
+                    self._functions_by_name[f.name] = NumericFunction(f.name, f.terms)
+                else:
+                    f._type = t
+                    self._functions_by_name[f.name] = f
             return result
         except ValueError as e:
             raise self._raise_typed_list_parsing_error(args, e) from e
@@ -623,6 +616,24 @@ class DomainTransformer(Transformer[Any, Domain]):
                 )
 
 
+
+    def _declare_function(self, func : FunctionExpression):
+        assert isinstance(func, (NumericFunction, ObjectFunction)) 
+        if  self._declared_functions is None:
+            self._declared_functions = {}
+        
+        if func is None:
+            raise ValueError("Function cannot be None")
+        
+        if func in self._declared_functions:
+            raise ValueError(f"Function {func.name} already declared")
+        
+        if func.name is None:
+            raise ValueError("Function name cannot be None")
+        if not self._functions_by_name:
+            self._functions_by_name = {}
+        if not func.name in self._functions_by_name.keys():
+            self._functions_by_name[func.name] = func
 class DomainParser(BaseParser[Domain]):
     """PDDL domain parser class."""
 

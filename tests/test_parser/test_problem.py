@@ -22,9 +22,10 @@ from pddl.logic.functions import (
     GreaterEqualThan,
     GreaterThan,
     NumericFunction,
+    ObjectFunction,
     NumericValue,
 )
-from pddl.logic.terms import Constant
+from pddl.logic.terms import Constant, Variable, Term
 from pddl.parser.problem import ProblemParser
 from pddl.requirements import Requirements
 
@@ -241,3 +242,67 @@ def test_numeric_function_equality_in_goal() -> None:
         EqualTo(NumericValue(3), NumericFunction("hello_counter", Constant("jimmy"))),
         EqualTo(NumericFunction("hello_counter", Constant("jammy")), NumericValue(5)),
     )
+
+
+def test_object_function_equality_in_goal() -> None:
+    """Try to parse a goal with a numeric condition and function."""
+    problem_str = dedent(
+        """
+    (define (problem basic-test)
+        (:domain basic-functions)
+
+        (:init
+            (= (f a) b)
+            (= (g b) a)
+        )
+
+        (:goal
+            (and
+                (= c (f a))
+            )
+        )
+    )
+    """
+    )
+    problem = ProblemParser()(problem_str)
+    assert problem.init == {
+        EqualTo(ObjectFunction("f", Constant("a")), Constant("b")),
+        EqualTo(ObjectFunction("g", Constant("b")), Constant("a"))
+    }
+
+
+def test_object_function_complex() -> None:
+    """Try to parse a goal with a numeric condition and function."""
+    problem_str = dedent(
+        """
+    (define (problem basic-test)
+        (:domain basic-functions)
+
+        (:init
+            (= (f a) b)
+            (= (h b) a)
+            (= (h a) b)
+
+        )
+
+        (:goal
+            (and 
+                (= (f (h b)) (f a))
+                (= c (f a))
+            )
+        )
+    )
+    """
+    )
+    problem = ProblemParser()(problem_str)
+    assert isinstance(problem.goal, And)
+    assert len(problem.goal.operands) == 2
+    assert set(problem.goal.operands) == {
+        EqualTo(Constant("c"), ObjectFunction("f", None, Constant("a"))),
+        EqualTo(
+            ObjectFunction("f", None,
+                ObjectFunction("h", None, Constant("b"))
+            ),
+            ObjectFunction("f", None, Constant("a"))
+        )
+    }
